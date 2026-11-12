@@ -80,4 +80,12 @@ export type ExplainResult = {
   warnings: string[];
 };
 
-export type BuildingOption = { id: string; name: string; postcode: string };
+export type BuildingOption = {
+  id: string;
+  name: string;
+  postcode: string;
+  address?: string;
+  city?: string;
+  development?: string | null;
+  homes?: number;
+};

@@ -266,3 +266,94 @@ export async function writeLetterText(
     return null;
   }
 }
+
+// ---- smart building search -------------------------------------------------------
+
+export type BuildingQuery = {
+  name: string | null;
+  street: string | null;
+  city: string | null;
+  postcode: string | null;
+  development: string | null;
+  min_homes: number | null;
+  max_homes: number | null;
+  has_lift: boolean | null;
+  sort_by:
+    | "relevance"
+    | "service_charge_increase"
+    | "insurance_increase"
+    | "open_tickets"
+    | "largest";
+  interpretation: string;
+};
+
+const QUERY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "name",
+    "street",
+    "city",
+    "postcode",
+    "development",
+    "min_homes",
+    "max_homes",
+    "has_lift",
+    "sort_by",
+    "interpretation",
+  ],
+  properties: {
+    name: {
+      type: ["string", "null"],
+      description: "Building name words, e.g. 'Fir House'",
+    },
+    street: { type: ["string", "null"] },
+    city: { type: ["string", "null"], description: "UK city, e.g. Manchester" },
+    postcode: {
+      type: ["string", "null"],
+      description: "Full or partial postcode, e.g. 'SO14' or 'M4 1RG'",
+    },
+    development: { type: ["string", "null"] },
+    min_homes: { type: ["integer", "null"] },
+    max_homes: { type: ["integer", "null"] },
+    has_lift: { type: ["boolean", "null"] },
+    sort_by: {
+      type: "string",
+      enum: [
+        "relevance",
+        "service_charge_increase",
+        "insurance_increase",
+        "open_tickets",
+        "largest",
+      ],
+    },
+    interpretation: {
+      type: "string",
+      description:
+        "Short plain-English restatement of what the user is looking for",
+    },
+  },
+};
+
+/** AI turns a natural-language request into filters. The search itself runs in code. */
+export async function parseBuildingQuery(
+  q: string,
+): Promise<BuildingQuery | null> {
+  const out = await chat(
+    [
+      {
+        role: "system",
+        content:
+          "You convert a UK block manager's request for a building into search filters. Only fill fields the user actually implied; use null otherwise. 'big'/'large' blocks ≈ min_homes 60; 'small' ≈ max_homes 20. If they ask about increases, insurance, problems/issues/open tickets, set sort_by accordingly. Never invent names or postcodes.",
+      },
+      { role: "user", content: q.slice(0, 500) },
+    ],
+    { json: QUERY_SCHEMA, maxTokens: 1500 },
+  );
+  if (!out) return null;
+  try {
+    return JSON.parse(out) as BuildingQuery;
+  } catch {
+    return null;
+  }
+}

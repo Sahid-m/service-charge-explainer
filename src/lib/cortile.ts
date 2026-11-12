@@ -232,3 +232,96 @@ export function getUnit(unitId: string): UnitRow | null {
     Row | undefined;
   return r ? toUnit(r) : null;
 }
+
+/** Buildings with the details needed to tell same-named buildings apart. */
+export function listBuildingOptions() {
+  const rows = conn()
+    .prepare(
+      `select b.id, b.name, b.address_line_1, b.city, b.postcode, b.unit_count,
+              d.name as development_name
+         from buildings b left join developments d on d.id = b.development_id
+        order by b.city, b.name, b.postcode`,
+    )
+    .all() as Row[];
+  return rows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    postcode: String(r.postcode ?? ""),
+    address: String(r.address_line_1 ?? ""),
+    city: String(r.city ?? ""),
+    development: (r.development_name as string) ?? null,
+    homes: Number(r.unit_count ?? 0),
+  }));
+}
+
+export type BuildingStats = ReturnType<typeof listBuildingOptions>[number] & {
+  hasLift: boolean;
+  /** Latest financial year end with bill lines */
+  yearEnd: string | null;
+  totalCurr: number;
+  totalPrev: number | null;
+  changePct: number | null;
+  insuranceChangePct: number | null;
+  openTickets: number;
+};
+
+let statsCache: BuildingStats[] | null = null;
+
+/** Per-building facts for smart search (computed once, in code). */
+export function buildingStats(): BuildingStats[] {
+  if (statsCache) return statsCache;
+  const opts = new Map(listBuildingOptions().map((b) => [b.id, b]));
+  const lifts = new Map(
+    (conn().prepare(`select id, has_lift from buildings`).all() as Row[]).map(
+      (r) => [String(r.id), Number(r.has_lift) === 1],
+    ),
+  );
+  const open = new Map(
+    (
+      conn()
+        .prepare(
+          `select building_id, count(*) as n from tickets
+            where status not in ('closed','resolved') group by building_id`,
+        )
+        .all() as Row[]
+    ).map((r) => [String(r.building_id), Number(r.n)]),
+  );
+  const rows = conn()
+    .prepare(
+      `select building_id, financial_year_end as fye, category,
+              coalesce(actual_gbp, budget_gbp) as amt
+         from service_charge_budgets`,
+    )
+    .all() as Row[];
+  // building -> year -> { total, insurance }
+  const agg = new Map<string, Map<string, { total: number; ins: number }>>();
+  for (const r of rows) {
+    const b = String(r.building_id);
+    const y = String(r.fye);
+    const years = agg.get(b) ?? new Map();
+    const cell = years.get(y) ?? { total: 0, ins: 0 };
+    cell.total += Number(r.amt ?? 0);
+    if (r.category === "buildings_insurance") cell.ins += Number(r.amt ?? 0);
+    years.set(y, cell);
+    agg.set(b, years);
+  }
+  const pct = (a: number, b: number | null | undefined) =>
+    b ? ((a - b) / b) * 100 : null;
+  statsCache = [...opts.values()].map((o) => {
+    const years = agg.get(o.id);
+    const keys = years ? [...years.keys()].sort() : [];
+    const curr = keys.length ? years!.get(keys.at(-1)!)! : null;
+    const prev = keys.length > 1 ? years!.get(keys.at(-2)!)! : null;
+    return {
+      ...o,
+      hasLift: lifts.get(o.id) ?? false,
+      yearEnd: keys.at(-1) ?? null,
+      totalCurr: curr?.total ?? 0,
+      totalPrev: prev?.total ?? null,
+      changePct: curr ? pct(curr.total, prev?.total) : null,
+      insuranceChangePct: curr ? pct(curr.ins, prev?.ins) : null,
+      openTickets: open.get(o.id) ?? 0,
+    };
+  });
+  return statsCache;
+}
