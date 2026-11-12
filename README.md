@@ -48,6 +48,10 @@ statement PDF, citing only what it found.
 <td><img src="docs/ai-building-search.png" alt="AI building search"><br><sub>Describe a building in plain English</sub></td>
 <td><img src="public/landing/draft-reply.png" alt="Draft reply"><br><sub>Reply to the owner, citing only found evidence</sub></td>
 </tr>
+<tr>
+<td><img src="docs/onboarding.png" alt="Onboarding"><br><sub>Onboarding: connect Cortile, Gmail, the client bank account and Drive (read-only)</sub></td>
+<td><img src="docs/letter-review.png" alt="Letter review"><br><sub>Review and approve each line before the statement is issued</sub></td>
+</tr>
 </table>
 
 ## How it works
