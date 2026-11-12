@@ -211,7 +211,8 @@ function toUnit(r: Row): UnitRow {
     floor: r.floor == null ? null : Number(r.floor),
     type: r.type == null ? null : String(r.type),
     sharePct: Number(r.service_charge_share_pct ?? 0),
-    leaseholderName: r.leaseholder_name == null ? null : String(r.leaseholder_name),
+    leaseholderName:
+      r.leaseholder_name == null ? null : String(r.leaseholder_name),
   };
 }
 
@@ -228,7 +229,6 @@ export function listUnits(buildingId: string): UnitRow[] {
 
 export function getUnit(unitId: string): UnitRow | null {
   const r = conn().prepare(`${UNIT_SQL} where u.id = ?`).get(unitId) as
-    | Row
-    | undefined;
+    Row | undefined;
   return r ? toUnit(r) : null;
 }

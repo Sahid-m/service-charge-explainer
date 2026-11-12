@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlertCircle, ArrowRight, CheckCircle2, XCircle } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { SavingsCalculator } from "./calculator";
+import { RoiCalculator } from "./calculator";
 import { ScreenshotFrame } from "./frame";
 import { Reveal } from "./reveal";
 import { Wordmark } from "./wordmark";
@@ -117,7 +117,7 @@ export function Hero() {
         </Reveal>
         <Reveal delay={0.1} className="mt-16 md:mt-20">
           <ScreenshotFrame
-            src="/landing/bill-table.png"
+            src="/landing/bill-lines.png"
             alt="Fir House dashboard: total service charge £90,640, up 15.4%, with each bill line marked Explained, Partial or Not found."
             aspect="1152 / 700"
             windowClassName="aspect-[4/5] md:aspect-[1152/700]"
@@ -188,29 +188,102 @@ export function Problem() {
   );
 }
 
-/* 3 ─ The numbers ─────────────────────────────────────── */
+/* 3 ─ The market ────────────────────────────────────── */
 
-const figures = [
+const sourcesList = [
   {
-    value: "£80.3m",
-    caption: "billed in service charges this year",
-    detail: "1,000 buildings · 31,614 homes",
+    n: 1,
+    label: "MHCLG, Leasehold dwellings 2024 to 2025",
+    href: "https://www.gov.uk/government/statistics/leasehold-dwellings-2024-to-2025/leasehold-dwellings-2024-to-2025",
   },
   {
-    value: "£6.6m",
-    caption: "of year-on-year increases",
-    detail: "across bill lines that went up",
+    n: 2,
+    label: "Jooble, Block manager salary (UK)",
+    href: "https://uk.jooble.org/salary/block-manager",
   },
   {
-    value: "£6.2m",
-    caption: "of those increases (93%) had no supporting ticket evidence",
-    detail: "£5.0m with none at all · £1.2m partial",
-    emphasis: true,
+    n: 3,
+    label: "Find a job (GOV.UK), Senior block manager vacancy",
+    href: "https://www.jobs.service.gov.uk/jobs/6a722f1892d9d7d3b8ad8d91",
   },
   {
-    value: "983",
-    caption: "of 1,000 buildings have an increase they can’t yet evidence",
-    detail: "at least one bill line each",
+    n: 4,
+    label: "Flat Living, Block manager workloads",
+    href: "https://www.flat-living.co.uk/?p=9689",
+  },
+  {
+    n: 5,
+    label: "Ringley, How much do management companies charge?",
+    href: "https://ringley.co.uk/faqs/how-much-do-management-companies-charge",
+  },
+];
+
+function Ref({ n }: { n: number }) {
+  const s = sourcesList.find((x) => x.n === n);
+  return (
+    <sup className="ml-0.5 text-[10px] font-medium">
+      <a
+        href={s?.href}
+        target="_blank"
+        rel="noreferrer"
+        className="text-primary hover:underline"
+        aria-label={`Source ${n}: ${s?.label}`}
+      >
+        [{n}]
+      </a>
+    </sup>
+  );
+}
+
+const figures: {
+  value: string;
+  caption: React.ReactNode;
+  detail: React.ReactNode;
+}[] = [
+  {
+    value: "4.90m",
+    caption: (
+      <>
+        leasehold homes in England
+        <Ref n={1} />
+      </>
+    ),
+    detail: "20% of the housing stock",
+  },
+  {
+    value: "£40,600",
+    caption: (
+      <>
+        average UK block manager salary
+        <Ref n={2} />
+      </>
+    ),
+    detail: (
+      <>
+        Range ~£33k–£50k; senior roles advertised at £35k–£45k
+        <Ref n={3} />
+      </>
+    ),
+  },
+  {
+    value: "~500",
+    caption: (
+      <>
+        units per block manager
+        <Ref n={4} />
+      </>
+    ),
+    detail: "Industry example: 20 blocks × 25 units",
+  },
+  {
+    value: "£250–£500",
+    caption: (
+      <>
+        typical management fee per flat per year
+        <Ref n={5} />
+      </>
+    ),
+    detail: "Charged to leaseholders by managing agents",
   },
 ];
 
@@ -220,14 +293,14 @@ export function Numbers() {
       <Container>
         <Reveal className="grid gap-6 md:grid-cols-12 md:gap-8">
           <div className="md:col-span-6">
-            <Eyebrow>The numbers</Eyebrow>
+            <Eyebrow>The market</Eyebrow>
             <SectionTitle>
-              We ran the matcher over a whole portfolio.
+              Millions of homes, and a few hundred units per manager.
             </SectionTitle>
           </div>
           <Body className="md:col-span-5 md:col-start-8 md:self-end">
-            Ticket data alone. Connecting invoices and bank payments closes more
-            of the gap — that’s the point.
+            Every leaseholder can challenge their service charge. Each block
+            manager answers for hundreds of them.
           </Body>
         </Reveal>
 
@@ -243,16 +316,10 @@ export function Numbers() {
                   i % 2 === 0 && "sm:pr-8",
                 )}
               >
-                <dt className="sr-only">{f.caption}</dt>
-                <dd
-                  className={cn(
-                    "text-5xl font-semibold tracking-tight tabular-nums",
-                    f.emphasis ? "text-coral" : "text-foreground",
-                  )}
-                >
+                <dt className="text-[2.75rem] leading-none font-semibold tracking-tight text-foreground tabular-nums">
                   {f.value}
-                </dd>
-                <dd className="mt-3 text-[15px] leading-6 text-foreground">
+                </dt>
+                <dd className="mt-4 text-[15px] leading-6 text-foreground">
                   {f.caption}
                 </dd>
                 <dd className="mt-1 text-sm text-muted-foreground">
@@ -261,22 +328,77 @@ export function Numbers() {
               </div>
             ))}
           </dl>
-          <p className="pt-4 text-xs text-muted-foreground lg:border-t lg:border-border">
-            Source: Cortile portfolio data, FY2026, ticket evidence only.
-          </p>
         </Reveal>
 
         <Reveal delay={0.05} className="mt-24 md:mt-28">
-          <div className="mb-10 grid gap-6 md:grid-cols-12 md:gap-8">
-            <h3 className="text-2xl font-semibold tracking-tight md:col-span-6">
-              What it’s worth to your firm
-            </h3>
-            <Body className="md:col-span-5 md:col-start-8">
-              Time spent answering owner queries, and the increases you can
-              explain before anyone asks.
+          <div className="grid gap-6 md:grid-cols-12 md:gap-8">
+            <div className="md:col-span-6">
+              <Eyebrow>Return on cost</Eyebrow>
+              <SectionTitle>
+                Hire another manager, or use Service Charge Explainer.
+              </SectionTitle>
+            </div>
+            <Body className="md:col-span-5 md:col-start-8 md:self-end">
+              Our price is ~2% of a typical £250–£500 per-unit management fee
+              <Ref n={5} />.
             </Body>
           </div>
-          <SavingsCalculator />
+
+          <div className="mt-12 grid overflow-hidden rounded-xl border border-border md:grid-cols-2">
+            <div className="border-b border-border p-6 md:border-r md:border-b-0 md:p-8">
+              <p className="text-sm text-muted-foreground">
+                Hire one more block manager
+              </p>
+              <p className="mt-2 text-4xl font-semibold tracking-tight tabular-nums">
+                ≈ £50,750
+                <span className="ml-1 text-base font-normal text-muted-foreground">
+                  a year
+                </span>
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                £40,600 salary
+                <Ref n={2} /> + 25% employer on-costs
+              </p>
+            </div>
+            <div className="bg-accent/50 p-6 md:p-8">
+              <p className="text-sm text-muted-foreground">
+                Service Charge Explainer for 2,000 units
+              </p>
+              <p className="mt-2 text-4xl font-semibold tracking-tight text-primary tabular-nums">
+                £12,000
+                <span className="ml-1 text-base font-normal text-muted-foreground">
+                  a year
+                </span>
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                £0.50 per unit per month (proposed pricing)
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <RoiCalculator />
+          </div>
+
+          <ol className="mt-10 space-y-1.5 border-t border-border pt-5 text-xs text-muted-foreground">
+            {sourcesList.map((s) => (
+              <li key={s.n} className="flex gap-2">
+                <span className="w-5 shrink-0 tabular-nums">[{s.n}]</span>
+                <a
+                  href={s.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all underline-offset-2 hover:text-foreground hover:underline sm:break-normal"
+                >
+                  {s.label}
+                  <span className="hidden text-muted-foreground/70 md:inline">
+                    {" "}
+                    — {s.href.replace(/^https:\/\//, "")}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ol>
         </Reveal>
       </Container>
     </section>

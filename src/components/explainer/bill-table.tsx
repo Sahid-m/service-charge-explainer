@@ -149,7 +149,10 @@ export function BillTable({
           <td className="hidden px-3 py-3 text-right sm:table-cell">
             {gbp0(result.totals.currGbp)}
           </td>
-          <td className="px-3 py-3 text-right" title={pct(totalPct)}>
+          <td
+            className="px-3 py-3 text-right whitespace-nowrap"
+            title={pct(totalPct)}
+          >
             {changeText(totalChange)}
           </td>
           <td colSpan={2} />

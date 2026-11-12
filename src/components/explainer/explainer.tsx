@@ -3,33 +3,27 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRight,
+  Check,
   ChevronDown,
-  FileSpreadsheet,
-  FolderOpen,
+  ChevronRight,
+  CircleCheck,
   Info,
-  Landmark,
-  Link2,
-  Mail,
   MailCheck,
+  Minus,
   PlayCircle,
   ReceiptText,
   RotateCw,
   ScrollText,
   TriangleAlert,
-  Wrench,
-  X,
 } from "lucide-react";
 import type {
   BuildingOption,
   ExplainResult,
   ExplainedLine,
 } from "@/lib/explain-types";
-import { GmailPanel } from "@/components/gmail-panel";
-import { BankPanel } from "@/components/bank-panel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Collapsible,
   CollapsibleContent,
@@ -45,12 +39,12 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "cn";
 import { BuildingPicker } from "./building-picker";
-import { BillTable, Change } from "./bill-table";
+import { BillTable, Change, StatusPill } from "./bill-table";
 import { EvidenceSheet } from "./evidence-sheet";
 import { UploadDocs } from "./upload-docs";
 import { DraftReplyDialog, useDraftReply } from "./draft-reply";
 import { fyLabel, gbp0, pct } from "./format";
-import { STATUS_META, StatusBadge } from "./status";
+import { STATUS_META } from "./status";
 import { TourCard, type TourStep } from "./tour";
 
 const DEMO_BUILDING = "bld_0853";
@@ -58,164 +52,166 @@ const HIGHLIGHT = [
   "ring-4",
   "ring-primary",
   "ring-offset-4",
-  "ring-offset-background",
+  "ring-offset-page",
   "rounded-xl",
 ];
+
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+/** Everything the summary needs, computed once from the API result. */
+function summarise(r: ExplainResult) {
+  const change =
+    r.totals.prevGbp != null ? r.totals.currGbp - r.totals.prevGbp : null;
+  const changePct =
+    change != null && r.totals.prevGbp
+      ? (change / r.totals.prevGbp) * 100
+      : null;
+  const explained = r.lines.reduce((a, l) => a + l.explainedGbp, 0);
+  const coverage = r.totals.currGbp ? (explained / r.totals.currGbp) * 100 : 0;
+  const increases = r.lines.filter((l) => (l.changeGbp ?? 0) > 0);
+  const backed = increases.filter((l) => l.status === "explained");
+  const needs = increases
+    .filter((l) => l.status !== "explained")
+    .sort((a, b) => (b.changeGbp ?? 0) - (a.changeGbp ?? 0));
+  const sum = (ls: ExplainedLine[]) =>
+    ls.reduce((a, l) => a + (l.changeGbp ?? 0), 0);
+  return {
+    change,
+    changePct,
+    explained,
+    coverage,
+    backedGbp: sum(backed),
+    needs,
+    needsGbp: sum(needs),
+  };
+}
+
+/** One plain sentence saying what evidence is missing for a line. */
+function missingSentence(l: ExplainedLine): string {
+  const jobs = l.chains.length;
+  const invoiced = l.chains.filter((c) => c.email).length;
+  if (l.status === "not_found")
+    return l.docs.length
+      ? "A document is on file, but no invoice or payment was found"
+      : "No invoice, payment or ticket found";
+  if (jobs === 0)
+    return l.uncostedTickets.length
+      ? `${plural(l.uncostedTickets.length, "ticket")} found, but none has a cost`
+      : `Evidence covers only ${Math.round(l.coveragePct)}% of the cost`;
+  if (invoiced < jobs)
+    return invoiced === 0
+      ? `${plural(jobs, "job")} found, but no invoice yet`
+      : `${invoiced} of ${plural(jobs, "job")} ${invoiced === 1 ? "has" : "have"} an invoice`;
+  return `Evidence covers only ${Math.round(l.coveragePct)}% of the ${gbp0(l.currGbp)} billed`;
+}
 
 function AppBar({
   buildings,
   building,
   onPick,
-  onDraft,
-  drafting,
-  canDraft,
+  onDemo,
 }: {
   buildings: BuildingOption[];
   building: string | null;
   onPick: (id: string) => void;
-  onDraft: () => void;
-  drafting: boolean;
-  canDraft: boolean;
+  onDemo: () => void;
 }) {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <ReceiptText className="size-5" />
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+        <Link href="/" className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <ReceiptText className="size-4" />
           </span>
-          <div className="min-w-0">
-            <div className="truncate font-semibold tracking-tight">
-              Service Charge Explainer
-            </div>
-            <div className="hidden truncate text-xs text-muted-foreground sm:block">
-              Every bill line traced to real evidence, for UK block managers
-            </div>
-          </div>
-          <nav className="ml-2 hidden items-center gap-1 text-sm md:flex">
-            <Link
-              href="/"
-              className={buttonVariants({ variant: "ghost", size: "sm" })}
-            >
-              Home
-            </Link>
-            <Link
-              href="/onboarding"
-              className={buttonVariants({ variant: "ghost", size: "sm" })}
-            >
-              Setup
-            </Link>
-          </nav>
-        </div>
-        <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+          <span className="truncate font-semibold tracking-tight">
+            Service Charge Explainer
+          </span>
+        </Link>
+        <nav className="flex items-center gap-1 text-sm sm:order-last">
+          <Link
+            href="/onboarding"
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
+          >
+            Setup
+          </Link>
+          <Button variant="ghost" size="sm" onClick={onDemo}>
+            <PlayCircle className="size-4" />
+            <span className="hidden sm:inline">Watch the demo</span>
+            <span className="sm:hidden">Demo</span>
+          </Button>
+        </nav>
+        <div className="flex w-full sm:w-auto">
           <BuildingPicker
             buildings={buildings}
             value={building}
             onChange={onPick}
           />
-          <Link
-            href={
-              building
-                ? `/letters?building=${encodeURIComponent(building)}`
-                : "/letters"
-            }
-            className={buttonVariants({
-              variant: "outline",
-              className: "shrink-0",
-            })}
-          >
-            <ScrollText className="size-4" />
-            <span className="hidden sm:inline">Create letter</span>
-            <span className="sm:hidden">Letter</span>
-          </Link>
-          <Button
-            onClick={onDraft}
-            disabled={!canDraft || drafting}
-            className="shrink-0"
-          >
-            <MailCheck className="size-4" />
-            <span className="hidden sm:inline">
-              {drafting ? "Drafting…" : "Draft reply to owner"}
-            </span>
-            <span className="sm:hidden">{drafting ? "…" : "Reply"}</span>
-          </Button>
         </div>
       </div>
     </header>
   );
 }
 
-function HowItWorks({
-  onDemo,
-  onDismiss,
+function Verdict({
+  result,
+  s,
+  onDraft,
+  drafting,
 }: {
-  onDemo: () => void;
-  onDismiss: () => void;
+  result: ExplainResult;
+  s: ReturnType<typeof summarise>;
+  onDraft: () => void;
+  drafting: boolean;
 }) {
-  const steps = [
-    {
-      icon: ScrollText,
-      title: "1. Bill lines",
-      text: "We load this year's service charge, line by line, next to last year's.",
-    },
-    {
-      icon: Link2,
-      title: "2. Matched to evidence",
-      text: "Each line is matched to tickets · invoices · bank payments · documents.",
-    },
-    {
-      icon: MailCheck,
-      title: "3. Plain-English reply",
-      text: "One click drafts an answer to the owner citing only what we found.",
-    },
-  ];
+  const name = result.building.name;
+  const headline =
+    s.change == null
+      ? `${name}'s service charge is ${gbp0(result.totals.currGbp)} this year.`
+      : s.change >= 0
+        ? `${name}'s service charge is up ${gbp0(s.change)} (${pct(s.changePct)}) this year.`
+        : `${name}'s service charge is down ${gbp0(-s.change)} (${pct(s.changePct)}) this year.`;
   return (
-    <Card className="relative bg-gradient-to-br from-primary/5 to-transparent">
-      <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-center">
-        <div className="flex flex-col gap-2 lg:w-60">
-          <div className="text-sm font-semibold">
-            Owners ask: “Why did my service charge go up?”
-          </div>
-          <p className="text-xs text-muted-foreground">
-            This app answers with evidence, not guesses.
-          </p>
-          <Button onClick={onDemo} className="w-fit" size="lg">
-            <PlayCircle className="size-4" /> Watch the demo
-          </Button>
-        </div>
-        <ol className="grid flex-1 gap-3 sm:grid-cols-3">
-          {steps.map((s, i) => (
-            <li key={s.title} className="flex items-start gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
-                <s.icon className="size-4 text-primary" />
+    <Card data-tour="verdict" className="gap-6 p-6 sm:p-8">
+      <div className="flex flex-col gap-3">
+        <h1 className="text-2xl leading-tight font-semibold tracking-tight text-balance">
+          {headline}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {s.needs.length === 0 ? (
+            "Every increase is backed by evidence."
+          ) : (
+            <>
+              {gbp0(s.backedGbp)} of the increases are backed by evidence.{" "}
+              <span className="font-medium text-coral">
+                {gbp0(s.needsGbp)} across {plural(s.needs.length, "line")} still
+                need evidence.
               </span>
-              <div>
-                <div className="flex items-center gap-1 text-sm font-medium">
-                  {s.title}
-                  {i < 2 && (
-                    <ArrowRight className="hidden size-3.5 text-muted-foreground sm:inline" />
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">{s.text}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="absolute top-2 right-2"
-          onClick={onDismiss}
-          aria-label="Hide how it works"
+            </>
+          )}
+        </p>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Link
+          href={`/letters?building=${encodeURIComponent(result.building.id)}`}
+          className={buttonVariants({ size: "lg" })}
         >
-          <X />
+          <ScrollText className="size-4" /> Create service charge letter
+        </Link>
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={onDraft}
+          disabled={drafting}
+        >
+          <MailCheck className="size-4" />
+          {drafting ? "Drafting…" : "Draft reply to owner"}
         </Button>
-      </CardContent>
+      </div>
     </Card>
   );
 }
 
-function SourcesBar({
+function SourcesLine({
   result,
   onUploaded,
 }: {
@@ -223,262 +219,224 @@ function SourcesBar({
   onUploaded: () => void;
 }) {
   const s = result.sources;
+  const hasPdf = result.lines.some((l) =>
+    l.chains.some((c) => c.email?.source === "pdf"),
+  );
   const items = [
-    {
-      icon: Wrench,
-      name: "Cortile tickets",
-      ok: s.cortile,
-      state: "Connected",
-      tip: "Maintenance tickets from the Cortile property-management system: what work was done, by whom, and its cost.",
-    },
-    {
-      icon: Mail,
-      name: "Gmail invoices",
-      ok: s.gmail,
-      state: s.gmail ? "Connected" : "Not connected",
-      tip: "Contractor invoice emails (and attachments) that prove what was billed for each job.",
-      href: "/api/auth/google",
-    },
-    {
-      icon: s.bank === "csv" ? FileSpreadsheet : Landmark,
-      name: "Bank payments",
-      ok: s.bank !== "none",
-      state:
-        s.bank === "truelayer"
-          ? "Open banking"
-          : s.bank === "csv"
-            ? "Statement CSV"
-            : "Not connected",
-      tip: "Payments out of the client bank account (TrueLayer or statement CSV) that prove invoices were actually paid.",
-      href: "/api/auth/truelayer",
-    },
-    {
-      icon: FolderOpen,
-      name: "Google Drive docs",
-      ok: s.drive,
-      state: s.drive ? "Connected" : "Via Gmail connect",
-      tip: "Leases, insurance schedules and management agreements. Access is granted when you connect Gmail.",
-      href: "/api/auth/google",
-    },
+    { name: "Cortile tickets", ok: s.cortile },
+    { name: "Invoices (PDF/Gmail)", ok: s.gmail || hasPdf },
+    { name: "Bank payments", ok: s.bank !== "none" },
+    { name: "Drive", ok: s.drive },
   ];
   return (
-    <section className="flex flex-col gap-2">
-      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        Evidence sources
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span>Evidence from:</span>
         {items.map((it) => (
-          <div
-            key={it.name}
-            className="flex items-center gap-3 rounded-lg border bg-card p-3"
-          >
-            <span
-              className={cn(
-                "flex size-8 shrink-0 items-center justify-center rounded-md",
-                it.ok
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
-              <it.icon className="size-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1 text-sm font-medium">
-                <span className="truncate">{it.name}</span>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type="button"
-                        className="text-muted-foreground"
-                        aria-label={`What is ${it.name}?`}
-                      />
-                    }
-                  >
-                    <Info className="size-3.5" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-64">{it.tip}</TooltipContent>
-                </Tooltip>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    it.ok ? "bg-emerald-500" : "bg-muted-foreground/40",
-                  )}
-                />
-                {it.state}
-              </div>
-            </div>
-            {!it.ok && it.href && (
-              <a
-                href={it.href}
-                className={buttonVariants({ variant: "outline", size: "xs" })}
-              >
-                Connect
-              </a>
+          <span key={it.name} className="inline-flex items-center gap-1">
+            {it.name}
+            {it.ok ? (
+              <Check className="size-3.5 text-emerald-600" aria-label="on" />
+            ) : (
+              <Minus className="size-3.5" aria-label="off" />
             )}
-          </div>
+          </span>
         ))}
+        {result.warnings.length > 0 && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="text-coral"
+                  aria-label="Source warnings"
+                />
+              }
+            >
+              <Info className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-72">
+              {result.warnings.join(" ")}
+            </TooltipContent>
+          </Tooltip>
+        )}
+        <Link
+          href="/onboarding"
+          className="font-medium text-primary hover:underline"
+        >
+          Manage
+        </Link>
       </div>
       <UploadDocs buildingId={result.building.id} onUploaded={onUploaded} />
-      {result.warnings.length > 0 && (
-        <Alert>
-          <TriangleAlert />
-          <AlertTitle>Heads up</AlertTitle>
-          <AlertDescription>
-            <ul className="list-disc pl-4">
-              {result.warnings.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
-      )}
-    </section>
+    </div>
   );
 }
 
-function Kpis({
+function Tiles({
   result,
-  onOpen,
+  s,
 }: {
   result: ExplainResult;
-  onOpen: (l: ExplainedLine) => void;
+  s: ReturnType<typeof summarise>;
 }) {
-  const { totals, lines } = result;
-  const change =
-    totals.prevGbp != null ? totals.currGbp - totals.prevGbp : null;
-  const changePct =
-    change != null && totals.prevGbp ? (change / totals.prevGbp) * 100 : null;
-  const explained = lines.reduce((a, l) => a + l.explainedGbp, 0);
-  const coverage = totals.currGbp ? (explained / totals.currGbp) * 100 : 0;
-  const count = (s: string) => lines.filter((l) => l.status === s).length;
-  const biggest = lines
-    .filter((l) => l.status !== "explained" && (l.changeGbp ?? 0) > 0)
-    .sort((a, b) => (b.changeGbp ?? 0) - (a.changeGbp ?? 0))[0];
-
   return (
-    <div data-tour="kpis" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <Card size="sm">
-        <CardContent className="flex flex-col gap-1">
-          <div className="text-xs text-muted-foreground">
-            Total service charge, {fyLabel(result.years.curr)}
-          </div>
-          <div className="text-2xl font-semibold tabular-nums">
-            {gbp0(totals.currGbp)}
-          </div>
-          <div className="text-xs text-muted-foreground tabular-nums">
-            vs {gbp0(totals.prevGbp)} last year ·{" "}
-            <Change gbpValue={change} pctValue={changePct} />
-          </div>
-        </CardContent>
+    <div className="grid grid-cols-3 gap-2 sm:gap-4">
+      <Card className="gap-1 p-3 sm:p-5">
+        <div className="text-xs text-muted-foreground sm:text-sm">
+          Change vs last year
+        </div>
+        <div className="text-lg font-semibold tabular-nums sm:text-2xl">
+          {s.change == null
+            ? "–"
+            : `${s.change > 0 ? "+" : ""}${gbp0(s.change)}`}
+        </div>
+        <div className="hidden text-muted-foreground tabular-nums sm:block">
+          {pct(s.changePct)} vs {gbp0(result.totals.prevGbp)}
+        </div>
       </Card>
-      <Card size="sm">
-        <CardContent className="flex flex-col gap-1">
-          <div className="text-xs text-muted-foreground">
-            £ backed by evidence
-          </div>
-          <div className="text-2xl font-semibold tabular-nums">
-            {Math.round(coverage)}%
-          </div>
-          <Progress value={Math.round(coverage)} className="my-1" />
-          <div className="text-xs text-muted-foreground tabular-nums">
-            {gbp0(explained)} of {gbp0(totals.currGbp)}
-          </div>
-        </CardContent>
+      <Card className="gap-1 p-3 sm:p-5">
+        <div className="text-xs text-muted-foreground sm:text-sm">
+          Bill backed by evidence
+        </div>
+        <div className="text-lg font-semibold tabular-nums sm:text-2xl">
+          {Math.round(s.coverage)}%
+        </div>
+        <Progress value={Math.round(s.coverage)} className="mt-1 sm:mt-2" />
+        <div className="hidden text-muted-foreground tabular-nums sm:block">
+          {gbp0(s.explained)} of {gbp0(result.totals.currGbp)}
+        </div>
       </Card>
-      <Card size="sm">
-        <CardContent className="flex flex-col gap-2">
-          <div className="text-xs text-muted-foreground">
-            {lines.length} bill lines checked
-          </div>
-          {(["explained", "partial", "not_found"] as const).map((s) => (
-            <div key={s} className="flex items-center justify-between text-sm">
-              <StatusBadge status={s} />
-              <span className="font-semibold tabular-nums">{count(s)}</span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-      <Card
-        size="sm"
-        className={cn(
-          biggest && "cursor-pointer transition-colors hover:bg-muted/40",
-        )}
-        onClick={() => biggest && onOpen(biggest)}
-      >
-        <CardContent className="flex flex-col gap-1">
-          <div className="text-xs text-muted-foreground">
-            Biggest unexplained increase
-          </div>
-          {biggest ? (
-            <>
-              <div className="text-lg leading-tight font-semibold">
-                {biggest.label}
-              </div>
-              <div className="text-sm tabular-nums">
-                <Change
-                  gbpValue={biggest.changeGbp}
-                  pctValue={biggest.changePct}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <StatusBadge status={biggest.status} />
-                <span className="text-xs font-medium text-primary">
-                  See evidence →
-                </span>
-              </div>
-            </>
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              None — every increase is explained.
-            </div>
+      <Card className="gap-1 p-3 sm:p-5">
+        <div className="text-xs text-muted-foreground sm:text-sm">
+          Lines needing evidence
+        </div>
+        <div
+          className={cn(
+            "text-lg font-semibold tabular-nums sm:text-2xl",
+            s.needs.length > 0 ? "text-coral" : "text-emerald-700",
           )}
-        </CardContent>
+        >
+          {s.needs.length}
+        </div>
+        <div className="hidden text-muted-foreground sm:block">
+          increases without full evidence
+        </div>
       </Card>
     </div>
+  );
+}
+
+function Attention({
+  needs,
+  onOpen,
+}: {
+  needs: ExplainedLine[];
+  onOpen: (l: ExplainedLine) => void;
+}) {
+  const top = needs.slice(0, 5);
+  return (
+    <Card data-tour="attention" className="gap-0 py-0">
+      <div className="flex items-baseline justify-between gap-3 px-5 pt-5 pb-3 sm:px-6">
+        <h2 className="text-base font-semibold">Needs your attention</h2>
+        {needs.length > top.length && (
+          <span className="text-muted-foreground">
+            Top {top.length} of {needs.length}
+          </span>
+        )}
+      </div>
+      {top.length === 0 ? (
+        <div className="flex items-center gap-2 px-5 pb-6 text-muted-foreground sm:px-6">
+          <CircleCheck className="size-4 text-emerald-600" />
+          All increases are backed by evidence.
+        </div>
+      ) : (
+        <ul className="divide-y border-t">
+          {top.map((l) => (
+            <li key={l.category}>
+              <button
+                type="button"
+                onClick={() => onOpen(l)}
+                className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none sm:gap-6 sm:px-6"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{l.label}</div>
+                  <div className="text-muted-foreground">
+                    {missingSentence(l)}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-6">
+                  <Change gbpValue={l.changeGbp} pctValue={l.changePct} />
+                  <span className="sm:w-28">
+                    <StatusPill line={l} />
+                  </span>
+                </div>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function FullBill({
+  result,
+  onSelect,
+}: {
+  result: ExplainResult;
+  onSelect: (l: ExplainedLine) => void;
+}) {
+  return (
+    <Collapsible>
+      <Card className="gap-0 py-0">
+        <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-5 py-4 text-left font-medium hover:bg-muted/50 sm:px-6">
+          <span>
+            See all {result.lines.length} bill lines
+            <span className="ml-2 font-normal text-muted-foreground">
+              {fyLabel(result.years.curr)}
+            </span>
+          </span>
+          <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-[panel-open]:rotate-180" />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <BillTable result={result} onSelect={onSelect} />
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }
 
 function LoadingSkeleton() {
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-16" />
+      <Skeleton className="h-44" />
+      <div className="grid gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-28" />
         ))}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-32" />
-        ))}
-      </div>
-      <Skeleton className="h-[420px]" />
+      <Skeleton className="h-72" />
     </div>
   );
 }
 
 function buildTour(r: ExplainResult): TourStep[] {
   const name = r.building.name;
+  const s = summarise(r);
   const find = (c: string) => r.lines.find((l) => l.category === c);
-  const change =
-    r.totals.prevGbp != null ? r.totals.currGbp - r.totals.prevGbp : null;
-  const changePct =
-    change != null && r.totals.prevGbp
-      ? (change / r.totals.prevGbp) * 100
-      : null;
-  const n = (s: string) => r.lines.filter((l) => l.status === s).length;
   const steps: TourStep[] = [
     {
       title: `A leaseholder at ${name} asks why their service charge went up`,
-      body: `The bill is ${gbp0(r.totals.currGbp)} this year vs ${gbp0(r.totals.prevGbp)} last year (${pct(changePct)}). Normally a manager digs through emails and bank statements for days.`,
-      target: "kpis",
+      body: `The answer is at the top: ${gbp0(r.totals.currGbp)} this year vs ${gbp0(r.totals.prevGbp)} last year (${pct(s.changePct)}). Every bill line was checked against tickets, invoices, payments and documents automatically.`,
+      target: "verdict",
     },
     {
-      title: "Every bill line is traced to evidence automatically",
-      body: `${r.lines.length} lines checked against tickets, invoices, payments and documents: ${n("explained")} explained, ${n("partial")} partial, ${n("not_found")} not found.`,
-      target: "table",
+      title: "Only what needs you",
+      body: s.needs.length
+        ? `${plural(s.needs.length, "increase")} (${gbp0(s.needsGbp)}) lack full evidence. The biggest are listed here, each with what's missing.`
+        : "Every increase is backed by evidence — nothing needs chasing.",
+      target: "attention",
     },
   ];
   const lineStep = (cat: string, mk: (l: ExplainedLine) => TourStep) => {
@@ -489,12 +447,12 @@ function buildTour(r: ExplainResult): TourStep[] {
     l.status === "explained" ? "✓" : l.status === "partial" ? "⚠" : "✗";
   lineStep("repairs_and_maintenance", (l) => ({
     title: `${icon(l)} ${l.label}: ${STATUS_META[l.status].label.toLowerCase()}`,
-    body: `${l.chains.length} costed job${l.chains.length === 1 ? "" : "s"} traced ticket → invoice → payment. Evidence covers ${Math.round(l.coveragePct)}% of the ${gbp0(l.currGbp)} billed.`,
+    body: `${plural(l.chains.length, "costed job")} traced ticket → invoice → payment. Evidence covers ${Math.round(l.coveragePct)}% of the ${gbp0(l.currGbp)} billed.`,
     line: l.category,
   }));
   lineStep("lift_maintenance", (l) => ({
     title: `${icon(l)} ${l.label}: ${l.status === "partial" ? "only part of it is evidenced" : STATUS_META[l.status].label.toLowerCase()}`,
-    body: `${l.chains.length} costed call-out${l.chains.length === 1 ? "" : "s"} found${l.uncostedTickets.length ? `, ${l.uncostedTickets.length} tickets with no recorded cost` : ""}. Only ${Math.round(l.coveragePct)}% of ${gbp0(l.currGbp)} is backed.`,
+    body: `${plural(l.chains.length, "costed call-out")} found${l.uncostedTickets.length ? `, ${plural(l.uncostedTickets.length, "ticket")} with no recorded cost` : ""}. Only ${Math.round(l.coveragePct)}% of ${gbp0(l.currGbp)} is backed.`,
     line: l.category,
   }));
   lineStep("buildings_insurance", (l) => ({
@@ -522,7 +480,6 @@ export function Explainer() {
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<ExplainedLine | null>(null);
-  const [showIntro, setShowIntro] = useState(true);
   const [tour, setTour] = useState<number | null>(null);
   const draft = useDraftReply();
 
@@ -574,6 +531,7 @@ export function Explainer() {
     setBuilding(id);
   }
 
+  const summary = useMemo(() => (result ? summarise(result) : null), [result]);
   const steps = useMemo(() => (result ? buildTour(result) : []), [result]);
   const tourReady =
     tour != null && !loading && result?.building.id === DEMO_BUILDING;
@@ -602,13 +560,9 @@ export function Explainer() {
     );
   }
   function startTour() {
-    setShowIntro(true);
     setSelected(null);
     setTour(0);
     if (building !== DEMO_BUILDING) pick(DEMO_BUILDING);
-  }
-  function exitTour() {
-    setTour(null);
   }
   function next() {
     if (tour == null) return;
@@ -630,35 +584,9 @@ export function Explainer() {
         buildings={buildings}
         building={building}
         onPick={pick}
-        onDraft={() => result && draft.generate(result.building.id)}
-        drafting={draft.loading}
-        canDraft={!!result && !loading}
+        onDemo={startTour}
       />
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
-        {showIntro ? (
-          <HowItWorks
-            onDemo={startTour}
-            onDismiss={() => setShowIntro(false)}
-          />
-        ) : (
-          <div className="flex justify-end">
-            <Button variant="outline" size="sm" onClick={startTour}>
-              <PlayCircle className="size-4" /> Watch the demo
-            </Button>
-          </div>
-        )}
-
-        {result && !loading && (
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {result.building.name}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {result.building.address}, {result.building.postcode}
-            </p>
-          </div>
-        )}
-
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
         {error && (
           <Alert variant="destructive">
             <TriangleAlert />
@@ -683,29 +611,25 @@ export function Explainer() {
 
         {loading ? (
           <LoadingSkeleton />
-        ) : result ? (
+        ) : result && summary ? (
           <>
-            <SourcesBar
-              result={result}
-              onUploaded={() => setReload((n) => n + 1)}
-            />
-            <Kpis result={result} onOpen={setSelected} />
-            <BillTable result={result} onSelect={setSelected} />
+            <div className="flex flex-col gap-3">
+              <Verdict
+                result={result}
+                s={summary}
+                onDraft={() => draft.generate(result.building.id)}
+                drafting={draft.loading}
+              />
+              <SourcesLine
+                result={result}
+                onUploaded={() => setReload((n) => n + 1)}
+              />
+            </div>
+            <Tiles result={result} s={summary} />
+            <Attention needs={summary.needs} onOpen={setSelected} />
+            <FullBill result={result} onSelect={setSelected} />
           </>
         ) : null}
-
-        <Collapsible className="rounded-xl border">
-          <CollapsibleTrigger className="group flex w-full items-center justify-between p-4 text-sm font-semibold">
-            Manage connections (Gmail, Drive, bank account)
-            <ChevronDown className="size-4 transition-transform group-data-[panel-open]:rotate-180" />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="grid items-start gap-4 p-4 pt-0 lg:grid-cols-2">
-              <GmailPanel />
-              <BankPanel />
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
       </main>
 
       <EvidenceSheet
@@ -725,7 +649,7 @@ export function Explainer() {
           sheetOpen={!!selected}
           onBack={() => tour > 0 && go(tour - 1)}
           onNext={next}
-          onExit={exitTour}
+          onExit={() => setTour(null)}
         />
       )}
     </TooltipProvider>

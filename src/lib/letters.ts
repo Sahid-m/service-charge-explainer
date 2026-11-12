@@ -11,7 +11,11 @@ import {
 
 import { AI_MODEL, writeLetterText } from "./ai";
 import type { UnitRow } from "./cortile";
-import type { EvidenceChain, ExplainResult, ExplainedLine } from "./explain-types";
+import type {
+  EvidenceChain,
+  ExplainResult,
+  ExplainedLine,
+} from "./explain-types";
 import type { LetterDraft, LetterLine, LetterPdfRequest } from "./letter-types";
 
 // ---- formatting ------------------------------------------------------------------
@@ -20,12 +24,8 @@ export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  const M = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+  return `${d.getUTCDate()} ${M[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
 export function gbp(n: number): string {
@@ -46,7 +46,10 @@ function pct(n: number | null): string {
 
 /** "Swift Lift Engineering <accounts@x.com>" -> "Swift Lift Engineering" */
 function senderName(from: string): string {
-  const name = from.replace(/<[^>]*>/g, "").replace(/"/g, "").trim();
+  const name = from
+    .replace(/<[^>]*>/g, "")
+    .replace(/"/g, "")
+    .trim();
   return name || from;
 }
 
@@ -66,7 +69,8 @@ function chainRef(c: EvidenceChain): string {
     );
   } else if (c.ticket) {
     parts[parts.length - 1] += `, ${gbp(c.amountGbp)}`;
-    if (c.ticket.contractor) parts[parts.length - 1] += `, ${c.ticket.contractor}`;
+    if (c.ticket.contractor)
+      parts[parts.length - 1] += `, ${c.ticket.contractor}`;
   }
   if (c.payment)
     parts.push(
@@ -301,6 +305,7 @@ class Doc {
       indent?: number;
       gap?: number;
       bullet?: boolean;
+      keep?: boolean;
     } = {},
   ) {
     const size = opts.size ?? 10;
@@ -308,6 +313,7 @@ class Doc {
     const indent = opts.indent ?? 0;
     const bx = opts.bullet ? 10 : 0;
     const lines = this.wrap(s, size, CONTENT_W - indent - bx, opts.font);
+    if (opts.keep) this.ensure(lines.length * lh);
     lines.forEach((ln, i) => {
       this.ensure(lh);
       this.y -= lh;
@@ -373,23 +379,39 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
   const prevLabel = r.years.prev ? fmtDate(r.years.prev) : "previous year";
 
   // (a) letterhead
-  d.text("Block Management Team", M, d.y, { size: 16, font: bold, color: BLUE });
-  d.text(fmtDate(today), PAGE_W - M - font.widthOfTextAtSize(fmtDate(today), 10), d.y, {
-    size: 10,
-    color: MUTED,
+  d.text("Block Management Team", M, d.y, {
+    size: 16,
+    font: bold,
+    color: BLUE,
   });
+  d.text(
+    fmtDate(today),
+    PAGE_W - M - font.widthOfTextAtSize(fmtDate(today), 10),
+    d.y,
+    {
+      size: 10,
+      color: MUTED,
+    },
+  );
   d.y -= 14;
   d.text("Service charge administration", M, d.y, { size: 9, color: MUTED });
   d.y -= 28;
   const recipient = unit
     ? [
-        cap(req.recipientName, 200) || unit.leaseholderName || "The Leaseholder",
+        cap(req.recipientName, 200) ||
+          unit.leaseholderName ||
+          "The Leaseholder",
         `Flat ${unit.unitNumber}`,
         r.building.name,
         r.building.address,
         r.building.postcode,
       ]
-    : ["All leaseholders", r.building.name, r.building.address, r.building.postcode];
+    : [
+        "All leaseholders",
+        r.building.name,
+        r.building.address,
+        r.building.postcode,
+      ];
   recipient.filter(Boolean).forEach((ln, i) => {
     d.text(ln, M, d.y, { size: 10, font: i === 0 ? bold : font });
     d.y -= 14;
@@ -403,6 +425,12 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
   });
   d.y -= 10;
   d.para(cap(req.intro) || templateIntro(r), { size: 10.5, gap: 4 });
+  if (included.length < r.lines.length) {
+    d.para(
+      `This statement covers ${included.length} of the ${r.lines.length} lines of the bill. The totals in the schedule below reflect the included lines only.`,
+      { size: 10, gap: 4 },
+    );
+  }
 
   // (d) schedule table
   d.heading("Schedule of charges");
@@ -450,7 +478,8 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
       const f = o.font ?? (i === 4 ? bold : font);
       lines.forEach((ln, j) => {
         const w = f.widthOfTextAtSize(ln, TS);
-        const tx = cols[i].align === "right" ? x + cols[i].w - PAD - w : x + PAD;
+        const tx =
+          cols[i].align === "right" ? x + cols[i].w - PAD - w : x + PAD;
         d.text(ln, tx, d.y - PAD - TS - j * TS * 1.3 + 1, {
           size: TS,
           font: f,
@@ -474,7 +503,9 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
     );
   drawHeader();
   const change = (l: ExplainedLine) =>
-    l.changeGbp == null ? "-" : `${signedGbp(l.changeGbp)}\n${pct(l.changePct)}`;
+    l.changeGbp == null
+      ? "-"
+      : `${signedGbp(l.changeGbp)}\n${pct(l.changePct)}`;
   for (const { l } of included) {
     const cells = [
       l.label,
@@ -512,7 +543,7 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
       `Total due for Flat ${unit!.unitNumber}: ${gbp(shareTotal)} (${share!.toFixed(
         2,
       )}% of ${gbp(totCurr)}). Any payments on account already made will be credited against this amount.`,
-      { size: 10, font: bold, gap: 4 },
+      { size: 10, font: bold, gap: 4, keep: true },
     );
   if (included.length < r.lines.length)
     d.para(
@@ -526,7 +557,9 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
     d.ensure(60);
     d.y -= 8;
     const fig = `${gbp(l.currGbp)}${
-      l.prevGbp != null ? `  (last year ${gbp(l.prevGbp)}, ${pct(l.changePct)})` : ""
+      l.prevGbp != null
+        ? `  (last year ${gbp(l.prevGbp)}, ${pct(l.changePct)})`
+        : ""
     }`;
     d.text(l.label, M, d.y - 11, { size: 11, font: bold });
     const st = STATUS_TEXT[l.status];
@@ -539,11 +572,10 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
     d.para(fig, { size: 9, color: MUTED, gap: 2 });
     d.para(explanation, { size: 10, gap: 3 });
     if (l.status === "not_found" || refs.length === 0) {
-      const who =
-        l.category.includes("insurance")
-          ? "the insurance broker"
-          : (l.uncostedTickets.find((t) => t.contractor)?.contractor ??
-            "the contractor");
+      const who = l.category.includes("insurance")
+        ? "the insurance broker"
+        : (l.uncostedTickets.find((t) => t.contractor)?.contractor ??
+          "the contractor");
       d.para(`No supporting evidence located yet - requested from ${who}.`, {
         size: 9,
         color: RED,
@@ -618,9 +650,13 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
     d.ensure(40);
     d.y -= 4;
     d.para(`${g} (${items.length})`, { size: 10, font: bold, gap: 1 });
-    for (const it of items) d.para(it, { size: 8.5, bullet: true, indent: 6, gap: 1 });
+    for (const it of items)
+      d.para(it, { size: 8.5, bullet: true, indent: 6, gap: 1 });
   }
-  if (!any) d.para("No evidence has been located yet for the included lines.", { size: 9 });
+  if (!any)
+    d.para("No evidence has been located yet for the included lines.", {
+      size: 9,
+    });
 
   // (g) closing
   d.heading("Questions about this statement");
@@ -632,11 +668,15 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
     "Lines marked Not found have no supporting evidence on file yet; we will write again when it is obtained.",
     { size: 10 },
   );
-  d.ensure(50);
-  d.y -= 10;
+  d.ensure(70);
+  d.y -= 22;
   d.text("Yours sincerely,", M, d.y, { size: 10 });
   d.y -= 26;
-  d.text("Block Management Team", M, d.y, { size: 11, font: bold, color: BLUE });
+  d.text("Block Management Team", M, d.y, {
+    size: 11,
+    font: bold,
+    color: BLUE,
+  });
 
   // header + footer on every page
   const N = d.pages.length;

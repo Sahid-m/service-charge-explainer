@@ -340,7 +340,7 @@ function Stepper({ step }: { step: number }) {
             <span
               className={cn(
                 "truncate text-sm",
-                active ? "font-medium" : "text-muted-foreground",
+                active ? "shrink-0 font-medium" : "text-muted-foreground",
                 !active && "hidden sm:inline",
               )}
             >
