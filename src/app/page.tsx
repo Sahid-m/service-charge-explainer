@@ -14,7 +14,7 @@ import {
 } from "@/components/landing/sections";
 
 export const metadata: Metadata = {
-  title: "Service Charge Explainer",
+  title: "Service Lens",
   description:
     "Trace every service-charge bill line to tickets, invoices and bank payments, and reply to leaseholders in plain English.",
 };

@@ -30,7 +30,7 @@ export function Wordmark({ className }: { className?: string }) {
           strokeLinejoin="round"
         />
       </svg>
-      Service Charge Explainer
+      Service Lens
     </span>
   );
 }

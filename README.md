@@ -1,8 +1,8 @@
-# Service Charge Explainer
+# Service Lens
 
 **Answer "why did my service charge go up?" with evidence, not guesswork.**
 
-Service Charge Explainer is for UK block managers. It traces every line of a building's
+Service Lens is for UK block managers. It traces every line of a building's
 service-charge bill to the evidence behind it: maintenance tickets, contractor invoices,
 payments from the client bank account and documents. It shows clearly where evidence
 is missing. It then writes the reply to the leaseholder, or issues a full service-charge

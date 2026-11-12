@@ -357,7 +357,7 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`Service charge statement - ${r.building.name}`);
   pdf.setAuthor("Block Management Team");
-  pdf.setCreator("Service Charge Explainer");
+  pdf.setCreator("Service Lens");
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const d = new Doc(pdf, font, bold);
@@ -702,7 +702,7 @@ export async function renderLetterPdf({ r, req, unit }: PdfInput) {
       color: RULE,
     });
     const foot = sanitize(
-      `Page ${i + 1} of ${N} · Generated ${fmtDate(today)} · Figures traced to evidence by Service Charge Explainer`,
+      `Page ${i + 1} of ${N} · Generated ${fmtDate(today)} · Figures traced to evidence by Service Lens`,
     );
     p.drawText(foot, {
       x: (PAGE_W - font.widthOfTextAtSize(foot, 7.5)) / 2,

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { Onboarding } from "@/components/onboarding/onboarding";
 
 export const metadata: Metadata = {
-  title: "Get started · Service Charge Explainer",
+  title: "Get started · Service Lens",
 };
 
 export default function OnboardingPage() {

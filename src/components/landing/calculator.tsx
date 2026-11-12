@@ -65,7 +65,7 @@ const fields: Field[] = [
   },
   {
     key: "saved",
-    label: "Time saved by Service Charge Explainer on that work",
+    label: "Time saved by Service Lens on that work",
     step: 5,
     suffix: "%",
     basis: "Assumption",
@@ -103,7 +103,7 @@ export function RoiCalculator() {
   const outputs = [
     { label: "Managers needed", value: one.format(managers) },
     { label: "Cost of this work today", value: `${gbp.format(costToday)}/yr` },
-    { label: "Service Charge Explainer", value: `${gbp.format(ourCost)}/yr` },
+    { label: "Service Lens", value: `${gbp.format(ourCost)}/yr` },
     {
       label: "Staff time saved",
       value: `${gbp.format(timeSaved)}/yr`,

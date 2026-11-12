@@ -166,7 +166,7 @@ export function Onboarding() {
             <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Receipt className="size-4" />
             </span>
-            <span className="hidden sm:inline">Service Charge Explainer</span>
+            <span className="hidden sm:inline">Service Lens</span>
           </Link>
           <span className="ml-auto text-xs text-muted-foreground tabular-nums md:hidden">
             Step {index + 1} of {STEPS.length}

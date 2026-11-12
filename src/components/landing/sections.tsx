@@ -84,7 +84,7 @@ export function Hero() {
         <Reveal delay={0.05}>
           <div className="mt-6 grid gap-8 md:grid-cols-12 md:items-end">
             <Body className="md:col-span-7 md:text-lg md:leading-8">
-              Service Charge Explainer traces every line of a building’s bill to
+              Service Lens traces every line of a building’s bill to
               the maintenance tickets, contractor invoices and bank payments
               behind it — and tells you plainly where the evidence is missing.
             </Body>
@@ -335,7 +335,7 @@ export function Numbers() {
             <div className="md:col-span-6">
               <Eyebrow>Return on cost</Eyebrow>
               <SectionTitle>
-                Hire another manager, or use Service Charge Explainer.
+                Hire another manager, or use Service Lens.
               </SectionTitle>
             </div>
             <Body className="md:col-span-5 md:col-start-8 md:self-end">
@@ -362,7 +362,7 @@ export function Numbers() {
             </div>
             <div className="bg-accent/50 p-6 md:p-8">
               <p className="text-sm text-muted-foreground">
-                Service Charge Explainer for 2,000 units
+                Service Lens for 2,000 units
               </p>
               <p className="mt-2 text-4xl font-semibold tracking-tight text-primary tabular-nums">
                 £12,000

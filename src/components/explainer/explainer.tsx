@@ -124,7 +124,7 @@ function AppBar({
             <ReceiptText className="size-4" />
           </span>
           <span className="truncate font-semibold tracking-tight">
-            Service Charge Explainer
+            Service Lens
           </span>
         </Link>
         <nav className="flex items-center gap-1 text-sm sm:order-last">

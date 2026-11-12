@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Real Estate GB",
-  description: "Explore and analyse the Great Britain property market.",
+  title: "Service Lens",
+  description: "Trace every service charge line to evidence and explain it in plain English.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
